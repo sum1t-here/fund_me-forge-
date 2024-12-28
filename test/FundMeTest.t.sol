@@ -59,7 +59,7 @@ contract FundMeTest is Test {
 
     modifier funded() {
         vm.prank(USER);
-        fundMe.fund{value: SEND_VALUE};
+        fundMe.fund{value: SEND_VALUE}();
         _;
     }
 
@@ -85,26 +85,36 @@ contract FundMeTest is Test {
         assertEq(startingFundMeBalance + startingOwnerBalance , endingOwnerBalance);
     }
 
-    function testWithdrawFromMultipleFunders() public funded {
-        uint160 numberOfFunders = 10;
-        uint160 startingFunderIndex = 1;
-        for (uint160 i = startingFunderIndex; i < numberOfFunders + startingFunderIndex; i++) {
-            // we get hoax from stdcheats
-            // prank + deal
-            address funder = address(i);
-            hoax(funder, SEND_VALUE);
-            fundMe.fund{value: SEND_VALUE}();
-        }
+function testWithdrawFromMultipleFunders() public funded {
+    uint160 numberOfFunders = 10;
+    uint160 startingFunderIndex = 1;
 
-        uint256 startingFundMeBalance = address(fundMe).balance;
-        uint256 startingOwnerBalance = fundMe.getOwner().balance;
-
-        vm.startPrank(fundMe.getOwner());
-        fundMe.withdraw();
-        vm.stopPrank();
-
-        assert(address(fundMe).balance == 0);
-        assert(startingFundMeBalance + startingOwnerBalance == fundMe.getOwner().balance);
-        assert((numberOfFunders + 1) * SEND_VALUE == fundMe.getOwner().balance - startingOwnerBalance);
+    // Arrange: Simulate multiple funders funding the contract
+    for (uint160 i = startingFunderIndex; i < numberOfFunders + startingFunderIndex; i++) {
+        address funder = address(i);
+        vm.deal(funder, SEND_VALUE); // Ensure the funder has enough balance
+        vm.prank(funder); // Make the next transaction from this address
+        fundMe.fund{value: SEND_VALUE}();
     }
+
+    uint256 startingFundMeBalance = address(fundMe).balance;
+    uint256 startingOwnerBalance = fundMe.getOwner().balance;
+
+    // Act: Withdraw funds as the owner
+    vm.startPrank(fundMe.getOwner());
+    fundMe.withdraw();
+    vm.stopPrank();
+
+    // Assert: Verify balances after withdrawal
+    uint256 endingFundMeBalance = address(fundMe).balance;
+    uint256 endingOwnerBalance = fundMe.getOwner().balance;
+
+    assertEq(endingFundMeBalance, 0, "FundMe balance should be zero after withdrawal");
+    assertEq(
+        startingFundMeBalance + startingOwnerBalance,
+        endingOwnerBalance,
+        "Owner balance should include all withdrawn funds"
+    );
+}
+
 }

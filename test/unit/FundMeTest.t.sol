@@ -2,8 +2,8 @@
 pragma solidity ^0.8.18;
 
 import {Test} from "forge-std/Test.sol";
-import {FundMe} from "../src/FundMe.sol";
-import {DeployFundMe} from "../script/DeployFundMe.s.sol";
+import {FundMe} from "../../src/FundMe.sol";
+import {DeployFundMe} from "../../script/DeployFundMe.s.sol";
 
 contract FundMeTest is Test {
     FundMe fundMe;
@@ -11,6 +11,7 @@ contract FundMeTest is Test {
     address USER = makeAddr("user");
     uint256 constant SEND_VALUE = 0.1 ether; // 100000000000000000
     uint256 constant STARTING_BALANCE = 10 ether;
+    uint256 constant GAS_PRICE = 1;
 
     function setUp() external{
         // fundme = new FundMe();
@@ -117,4 +118,35 @@ function testWithdrawFromMultipleFunders() public funded {
     );
 }
 
+function testWithdrawFromMultipleFundersCheaper() public funded {
+    uint160 numberOfFunders = 10;
+    uint160 startingFunderIndex = 1;
+
+    // Arrange: Simulate multiple funders funding the contract
+    for (uint160 i = startingFunderIndex; i < numberOfFunders + startingFunderIndex; i++) {
+        address funder = address(i);
+        vm.deal(funder, SEND_VALUE); // Ensure the funder has enough balance
+        vm.prank(funder); // Make the next transaction from this address
+        fundMe.fund{value: SEND_VALUE}();
+    }
+
+    uint256 startingFundMeBalance = address(fundMe).balance;
+    uint256 startingOwnerBalance = fundMe.getOwner().balance;
+
+    // Act: Withdraw funds as the owner
+    vm.startPrank(fundMe.getOwner());
+    fundMe.cheaperWithdraw();
+    vm.stopPrank();
+
+    // Assert: Verify balances after withdrawal
+    uint256 endingFundMeBalance = address(fundMe).balance;
+    uint256 endingOwnerBalance = fundMe.getOwner().balance;
+
+    assertEq(endingFundMeBalance, 0, "FundMe balance should be zero after withdrawal");
+    assertEq(
+        startingFundMeBalance + startingOwnerBalance,
+        endingOwnerBalance,
+        "Owner balance should include all withdrawn funds"
+    );
+}
 }
